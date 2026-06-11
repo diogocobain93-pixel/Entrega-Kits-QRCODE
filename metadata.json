@@ -1,0 +1,8 @@
+{
+  "name": "Reirakits com QR",
+  "description": "Sistema profissional de gerenciamento de eventos e entrega de kits com autenticação multinível.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

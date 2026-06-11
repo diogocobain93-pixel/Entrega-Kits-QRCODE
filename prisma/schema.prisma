@@ -1,0 +1,77 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  nome      String
+  email     String   @unique
+  senha     String
+  tipo      String   // ADMIN | ORGANIZADOR
+  status    String   @default("ATIVO") // ATIVO | INATIVO
+  eventos   Event[]
+  createdAt DateTime @default(now())
+}
+
+model Event {
+  id            String   @id @default(uuid())
+  nome          String
+  slug          String?  @unique
+  descricao     String?
+  dataEvento    DateTime
+  local         String
+  status        String   @default("ATIVO") // ATIVO | INATIVO
+  organizadorId String
+  organizador   User     @relation(fields: [organizadorId], references: [id])
+  participantes Participant[]
+  deliveryRequests DeliveryRequest[]
+  imageUrl      String?
+  pagamentoStatus String   @default("A_RECEBER") // A_RECEBER | RECEBIDO
+  createdAt     DateTime @default(now())
+}
+
+model Participant {
+  id              String   @id @default(uuid())
+  numero          String?
+  chip            String?
+  nome            String
+  sexo            String?
+  equipe          String?
+  cidade          String?
+  dataNascimento  String?
+  cpf             String
+  modalidade      String?
+  kit             String?
+  tamanhoCamiseta String?
+  numeroPeito     String?
+  email           String?
+  telefone        String?
+  status          String   @default("INSCRITO") // INSCRITO | ENTREGUE
+  eventId         String
+  event           Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  deliveryRequests DeliveryRequest[]
+  entregueAt      DateTime?
+  createdAt       DateTime @default(now())
+
+  @@unique([cpf, eventId])
+}
+
+model DeliveryRequest {
+  id            String      @id @default(uuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  eventId       String
+  event         Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  status        String      @default("PENDENTE") // PENDENTE | EM_SEPARACAO | ENTREGUE
+  atendenteNome String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+}
