@@ -118,14 +118,27 @@ async function startServer() {
 
   // --- API Routes ---
 
-  app.get('/api/entregas/recentes', authenticate, async (req, res) => {
+  app.get('/api/entregas/recentes', authenticate, async (req: any, res) => {
     try {
+      const { user } = req;
+      
+      const where: any = {
+        status: {
+          in: ['PENDENTE', 'EM_SEPARACAO']
+        }
+      };
+
+      if (user.tipo !== 'ADMIN') {
+        const userEvents = await prisma.event.findMany({
+          where: { organizadorId: user.id },
+          select: { id: true }
+        });
+        const accessibleEventIds = userEvents.map(e => e.id);
+        where.eventId = { in: accessibleEventIds };
+      }
+
       const recentRequests = await prisma.deliveryRequest.findMany({
-        where: {
-          status: {
-            in: ['PENDENTE', 'EM_SEPARACAO']
-          }
-        },
+        where,
         include: {
           participant: true,
           event: {
@@ -139,6 +152,7 @@ async function startServer() {
       });
       res.json(recentRequests);
     } catch (err) {
+      console.error(err);
       res.status(500).json({ error: 'Erro ao buscar entregas recentes' });
     }
   });
@@ -222,8 +236,15 @@ async function startServer() {
 
   app.post('/api/entregas/:id/separar', authenticate, async (req: any, res) => {
     const { id } = req.params;
-    const deliveryRequest = await prisma.deliveryRequest.findUnique({ where: { id } });
+    const deliveryRequest = await prisma.deliveryRequest.findUnique({ 
+      where: { id },
+      include: { event: true }
+    });
     if (!deliveryRequest) return res.status(404).json({ error: 'Pedido não encontrado' });
+
+    if (req.user.tipo !== 'ADMIN' && deliveryRequest.event.organizadorId !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado: Este pedido pertence a outro organizador' });
+    }
 
     if (deliveryRequest.status === 'EM_SEPARACAO' && deliveryRequest.atendenteNome !== req.user.nome) {
       return res.status(400).json({ error: 'Este kit já está sendo separado por outro atendente' });
@@ -241,8 +262,15 @@ async function startServer() {
 
   app.post('/api/entregas/:id/cancelar', authenticate, async (req: any, res) => {
     const { id } = req.params;
-    const deliveryRequest = await prisma.deliveryRequest.findUnique({ where: { id } });
+    const deliveryRequest = await prisma.deliveryRequest.findUnique({ 
+      where: { id },
+      include: { event: true }
+    });
     if (!deliveryRequest) return res.status(404).json({ error: 'Pedido não encontrado' });
+
+    if (req.user.tipo !== 'ADMIN' && deliveryRequest.event.organizadorId !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado: Este pedido pertence a outro organizador' });
+    }
 
     if (deliveryRequest.status === 'ENTREGUE') {
       return res.status(400).json({ error: 'Entrega já finalizada' });
@@ -258,15 +286,19 @@ async function startServer() {
     res.json(updated);
   });
 
-  app.post('/api/entregas/:id/confirmar', authenticate, async (req, res) => {
+  app.post('/api/entregas/:id/confirmar', authenticate, async (req: any, res) => {
     const { id } = req.params;
     
     const deliveryRequest = await prisma.deliveryRequest.findUnique({ 
       where: { id },
-      include: { participant: true }
+      include: { participant: true, event: true }
     });
 
     if (!deliveryRequest) return res.status(404).json({ error: 'Pedido não encontrado' });
+
+    if (req.user.tipo !== 'ADMIN' && deliveryRequest.event.organizadorId !== req.user.id) {
+      return res.status(403).json({ error: 'Acesso negado: Este pedido pertence a outro organizador' });
+    }
 
     // Transaction to update both
     const [updatedRequest] = await prisma.$transaction([
