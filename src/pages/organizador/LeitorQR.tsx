@@ -100,10 +100,33 @@ export default function LeitorQRPage() {
     }
   }, [mode]);
 
+  const extractCpf = (rawInput: string): string | null => {
+    let text = rawInput.trim();
+    // Remove any trailing slashes
+    while (text.endsWith('/')) {
+      text = text.slice(0, -1);
+    }
+
+    // Check if it represents a URL or hierarchy path
+    if (text.includes('/') || text.toLowerCase().startsWith('http')) {
+      const lastSlashIndex = text.lastIndexOf('/');
+      if (lastSlashIndex !== -1) {
+        text = text.slice(lastSlashIndex + 1);
+      }
+    }
+
+    // Retain only digits to build the Brazilian CPF sequence
+    const digitsOnly = text.replace(/\D/g, '');
+    if (digitsOnly.length === 11) {
+      return digitsOnly;
+    }
+    return null;
+  };
+
   const handleCpfFound = async (cpf: string) => {
-    const cleaned = cpf.replace(/\D/g, '');
-    if (!cleaned || cleaned.length < 3) {
-      setError('Formato de QR Code ou CPF inválido.');
+    const cleaned = extractCpf(cpf);
+    if (!cleaned) {
+      setError('CPF não identificado no QR Code.');
       return;
     }
 
@@ -296,7 +319,9 @@ export default function LeitorQRPage() {
                 <div className="bg-red-50 border border-red-200 text-red-600 px-5 py-4 rounded-2xl flex items-start gap-3 shadow-md animate-in slide-in-from-bottom-2 duration-300">
                   <XCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-black uppercase tracking-tight">Falha na ativação</h4>
+                    <h4 className="text-sm font-black uppercase tracking-tight">
+                      {error.includes('câmera') || error.includes('ativar') ? 'Falha na ativação' : 'Aviso do Scanner'}
+                    </h4>
                     <p className="text-xs mt-1 font-semibold text-red-500/90 leading-relaxed">{error}</p>
                   </div>
                 </div>
