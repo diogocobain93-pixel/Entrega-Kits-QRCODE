@@ -915,108 +915,117 @@ async function startServer() {
   });
 
   app.post('/api/eventos/:id/participantes/importar', authenticate, async (req: any, res) => {
-    const { id } = req.params;
-    const { csvContent } = req.body;
+    try {
+      const { id } = req.params;
+      const { csvContent } = req.body;
 
-    if (!csvContent) {
-      return res.status(400).json({ error: 'Conteúdo CSV não fornecido' });
-    }
-
-    const access: any = await checkEventAccess(id, req.user);
-    if (access.error) return res.status(access.status).json({ error: access.error });
-
-    const lines = csvContent.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
-    if (lines.length < 2) {
-      return res.status(400).json({ error: 'CSV vazio ou sem dados' });
-    }
-
-    // 1. Fetch all existing CPFs for this event to avoid duplicates in memory
-    const existingParticipants = await prisma.participant.findMany({
-      where: { eventId: id },
-      select: { cpf: true }
-    });
-    const existingCpfs = new Set(existingParticipants.map(p => p.cpf));
-
-    const toInsert: any[] = [];
-    const ignoredList: { row: number; nome: string; reason: string }[] = [];
-    const cpfsInCsv = new Set<string>();
-
-    // 2. Validate in memory
-    for (let i = 1; i < lines.length; i++) {
-      const columns = lines[i].split(',').map((c: string) => c.trim());
-      
-      if (columns.length < 2) { 
-        ignoredList.push({ row: i + 1, nome: 'Linha inválida', reason: 'Colunas insuficientes' });
-        continue;
+      if (!csvContent) {
+        return res.status(400).json({ error: 'Conteúdo CSV não fornecido' });
       }
 
-      const [
-        numero, chip, nome, sexo, equipe, cidade, 
-        dataNascimento, rawCpf, modalidade, kit, 
-        tamanhoCamiseta, numeroPeito, statusInCsv
-      ] = columns;
+      const access: any = await checkEventAccess(id, req.user);
+      if (access.error) return res.status(access.status).json({ error: access.error });
 
-      if (!nome || !rawCpf) {
-        ignoredList.push({ row: i + 1, nome: nome || 'Sem nome', reason: 'Nome ou CPF ausente' });
-        continue;
+      const lines = csvContent.split('\n').map((l: string) => l.trim()).filter((l: string) => l);
+      if (lines.length < 2) {
+        return res.status(400).json({ error: 'CSV vazio ou sem dados' });
       }
 
-      const cpf = cleanCPF(rawCpf);
-
-      // Check internal CSV duplicates
-      if (cpfsInCsv.has(cpf)) {
-        ignoredList.push({ row: i + 1, nome, reason: 'CPF duplicado no arquivo' });
-        continue;
-      }
-      cpfsInCsv.add(cpf);
-
-      // Check database duplicates
-      if (existingCpfs.has(cpf)) {
-        ignoredList.push({ row: i + 1, nome, reason: 'Participante já cadastrado neste evento' });
-        continue;
-      }
-
-      let status: "INSCRITO" | "ENTREGUE" = "INSCRITO";
-      const s = statusInCsv?.toLowerCase();
-      if (s === 'entregue' || s === 'sim' || s === 's' || s === '1') {
-        status = "ENTREGUE";
-      }
-
-      toInsert.push({
-        numero: numero || null,
-        chip: chip || null,
-        nome,
-        sexo: sexo || null,
-        equipe: equipe || null,
-        cidade: cidade || null,
-        dataNascimento: dataNascimento || null,
-        cpf,
-        modalidade: modalidade || null,
-        kit: kit || null,
-        tamanhoCamiseta: tamanhoCamiseta || null,
-        numeroPeito: numeroPeito || null,
-        status,
-        eventId: id
+      // 1. Fetch all existing CPFs for this event to avoid duplicates in memory
+      const existingParticipants = await prisma.participant.findMany({
+        where: { eventId: id },
+        select: { cpf: true }
       });
-    }
+      const existingCpfs = new Set(existingParticipants.map(p => p.cpf));
 
-    // 3. Batch insertion
-    let importedCount = 0;
-    if (toInsert.length > 0) {
-      const result = await prisma.participant.createMany({
-        data: toInsert,
-        skipDuplicates: true
+      const toInsert: any[] = [];
+      const ignoredList: { row: number; nome: string; reason: string }[] = [];
+      const cpfsInCsv = new Set<string>();
+
+      // 2. Validate in memory
+      for (let i = 1; i < lines.length; i++) {
+        const columns = lines[i].split(',').map((c: string) => c.trim());
+        
+        if (columns.length < 2) { 
+          ignoredList.push({ row: i + 1, nome: 'Linha inválida', reason: 'Colunas insuficientes' });
+          continue;
+        }
+
+        const [
+          numero, chip, nome, sexo, equipe, cidade, 
+          dataNascimento, rawCpf, modalidade, kit, 
+          tamanhoCamiseta, numeroPeito, statusInCsv
+        ] = columns;
+
+        if (!nome || !rawCpf) {
+          ignoredList.push({ row: i + 1, nome: nome || 'Sem nome', reason: 'Nome ou CPF ausente' });
+          continue;
+        }
+
+        const cpf = cleanCPF(rawCpf);
+        if (!cpf) {
+          ignoredList.push({ row: i + 1, nome, reason: 'CPF inválido ou vazio' });
+          continue;
+        }
+
+        // Check internal CSV duplicates
+        if (cpfsInCsv.has(cpf)) {
+          ignoredList.push({ row: i + 1, nome, reason: 'CPF duplicado no arquivo' });
+          continue;
+        }
+        cpfsInCsv.add(cpf);
+
+        // Check database duplicates
+        if (existingCpfs.has(cpf)) {
+          ignoredList.push({ row: i + 1, nome, reason: 'Participante já cadastrado neste evento' });
+          continue;
+        }
+
+        let status: "INSCRITO" | "ENTREGUE" = "INSCRITO";
+        const s = statusInCsv?.toLowerCase();
+        if (s === 'entregue' || s === 'sim' || s === 's' || s === '1') {
+          status = "ENTREGUE";
+        }
+
+        toInsert.push({
+          numero: numero || null,
+          chip: chip || null,
+          nome,
+          sexo: sexo || null,
+          equipe: equipe || null,
+          cidade: cidade || null,
+          dataNascimento: dataNascimento || null,
+          cpf,
+          modalidade: modalidade || null,
+          kit: kit || null,
+          tamanhoCamiseta: tamanhoCamiseta || null,
+          numeroPeito: numeroPeito || null,
+          status,
+          eventId: id
+        });
+      }
+
+      // 3. Batch insertion
+      let importedCount = 0;
+      if (toInsert.length > 0) {
+        const result = await prisma.participant.createMany({
+          data: toInsert,
+          skipDuplicates: true
+        });
+        importedCount = result.count;
+      }
+
+      res.json({
+        totalProcessed: lines.length - 1,
+        imported: importedCount,
+        ignored: ignoredList.length,
+        errors: 0, // Errors are grouped in ignored for simplicity
+        ignoredList
       });
-      importedCount = result.count;
+    } catch (err: any) {
+      console.error('Error in participants import:', err);
+      res.status(500).json({ error: 'Erro ao importar participantes: ' + (err.message || err) });
     }
-
-    res.json({
-      totalProcessed: lines.length - 1,
-      imported: importedCount,
-      ignored: ignoredList.length,
-      errors: 0, // Errors are grouped in ignored for simplicity
-      ignoredList
-    });
   });
 
   // GET Event Details
