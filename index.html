@@ -6,9 +6,24 @@
     <title>Sistema de Entrega de Kits</title>
     <link rel="manifest" href="/manifest.json" />
     <script>
+      // Clear service workers and caches on load to fix blank white screen issues from old builds
       if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js');
+        navigator.serviceWorker.getRegistrations().then((registrations) => {
+          for (const registration of registrations) {
+            registration.unregister().then((success) => {
+              if (success) {
+                console.log('Service Worker unregistered successfully.');
+                // Clear cache and hard reload once if we unregistered a service worker to force fresh assets
+                if (window.caches) {
+                  caches.keys().then((names) => {
+                    Promise.all(names.map(name => caches.delete(name))).then(() => {
+                      window.location.reload();
+                    });
+                  });
+                }
+              }
+            });
+          }
         });
       }
     </script>

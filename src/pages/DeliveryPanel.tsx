@@ -75,6 +75,17 @@ export default function DeliveryPanelPage() {
     }
   }, [requests]);
 
+  // Se a requisição em foco não estiver mais na lista ativa (ex: entregue ou cancelada por outro atendente),
+  // fechamos o Modo Foco automaticamente para evitar que a tela de fundo continue desfocada e travada.
+  useEffect(() => {
+    if (focusedReqId) {
+      const exists = requests.some(r => r.id === focusedReqId);
+      if (!exists && !loading) {
+        setFocusedReqId(null);
+      }
+    }
+  }, [requests, focusedReqId, loading]);
+
   const fetchRequests = async () => {
     try {
       const data = await api.getEntregasRecentes();
