@@ -45,10 +45,30 @@ export default function DeliveryPanelPage() {
   const [previousIds, setPreviousIds] = useState<string[]>([]);
   const [newRequestIds, setNewRequestIds] = useState<string[]>([]);
 
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+
   useEffect(() => {
     fetchRequests();
     const interval = setInterval(fetchRequests, 5000); // Check every 5 seconds
-    return () => clearInterval(interval);
+
+    const handleOnline = () => {
+      setIsOnline(true);
+      fetchRequests();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      setError('Sem conexão com a internet');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Soft sound and card blink on new requests in queue
@@ -174,10 +194,20 @@ export default function DeliveryPanelPage() {
             <p className="text-sm font-semibold text-slate-400 mt-1">Pedidos de retirada via Totem em tempo real.</p>
           </div>
 
-          <div className="flex items-center gap-2 text-[#2563EB] bg-blue-50 px-4 py-2 rounded-full border border-blue-100 shadow-sm">
-            <Circle size={8} className="fill-current animate-pulse" />
-            <span className="text-xs font-bold tracking-tight">Monitorando em tempo real</span>
-          </div>
+          {!isOnline || error ? (
+            <button 
+              onClick={fetchRequests}
+              className="flex items-center gap-2 text-amber-700 bg-amber-50 hover:bg-amber-100 px-4 py-2 rounded-full border border-amber-200 shadow-sm transition-all"
+            >
+              <Circle size={8} className="fill-amber-500 text-amber-500 animate-pulse" />
+              <span className="text-xs font-bold tracking-tight">Sem Conexão (Clique para Reconectar)</span>
+            </button>
+          ) : (
+            <div className="flex items-center gap-2 text-[#2563EB] bg-blue-50 px-4 py-2 rounded-full border border-blue-100 shadow-sm">
+              <Circle size={8} className="fill-current animate-pulse" />
+              <span className="text-xs font-bold tracking-tight">Monitorando em tempo real</span>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 px-8 pb-8 overflow-y-auto overflow-x-hidden">
