@@ -41,9 +41,24 @@ export default function DeliveryPanelPage() {
   const [processingId, setProcessingId] = useState<string | null>(null);
 
   // Focus Mode and Notification States
+  const [focusModeEnabled, setFocusModeEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem('focusModeEnabled');
+    return saved !== null ? saved === 'true' : true;
+  });
   const [focusedReqId, setFocusedReqId] = useState<string | null>(null);
   const [previousIds, setPreviousIds] = useState<string[]>([]);
   const [newRequestIds, setNewRequestIds] = useState<string[]>([]);
+
+  const toggleFocusMode = () => {
+    setFocusModeEnabled(prev => {
+      const next = !prev;
+      localStorage.setItem('focusModeEnabled', String(next));
+      if (!next) {
+        setFocusedReqId(null);
+      }
+      return next;
+    });
+  };
 
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
 
@@ -163,7 +178,9 @@ export default function DeliveryPanelPage() {
   };
 
   const handleSeparateAndFocus = async (id: string) => {
-    setFocusedReqId(id);
+    if (focusModeEnabled) {
+      setFocusedReqId(id);
+    }
     await handleSeparate(id);
   };
 
@@ -194,20 +211,35 @@ export default function DeliveryPanelPage() {
             <p className="text-sm font-semibold text-slate-400 mt-1">Pedidos de retirada via Totem em tempo real.</p>
           </div>
 
-          {!isOnline || error ? (
+          <div className="flex items-center gap-3">
             <button 
-              onClick={fetchRequests}
-              className="flex items-center gap-2 text-amber-700 bg-amber-50 hover:bg-amber-100 px-4 py-2 rounded-full border border-amber-200 shadow-sm transition-all"
+              onClick={toggleFocusMode}
+              className={`flex items-center gap-2 px-4 py-2 rounded-full border text-xs font-bold transition-all shadow-sm ${
+                focusModeEnabled 
+                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700 hover:bg-indigo-100' 
+                  : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200'
+              }`}
+              title={focusModeEnabled ? "Modo Foco Ativado (clique para desativar)" : "Modo Foco Desativado (clique para ativar)"}
             >
-              <Circle size={8} className="fill-amber-500 text-amber-500 animate-pulse" />
-              <span className="text-xs font-bold tracking-tight">Sem Conexão (Clique para Reconectar)</span>
+              <Target size={14} className={focusModeEnabled ? "text-indigo-600 animate-pulse" : "text-slate-400"} />
+              <span>Modo Foco: <strong className="uppercase">{focusModeEnabled ? 'Ativado' : 'Desativado'}</strong></span>
             </button>
-          ) : (
-            <div className="flex items-center gap-2 text-[#2563EB] bg-blue-50 px-4 py-2 rounded-full border border-blue-100 shadow-sm">
-              <Circle size={8} className="fill-current animate-pulse" />
-              <span className="text-xs font-bold tracking-tight">Monitorando em tempo real</span>
-            </div>
-          )}
+
+            {!isOnline || error ? (
+              <button 
+                onClick={fetchRequests}
+                className="flex items-center gap-2 text-amber-700 bg-amber-50 hover:bg-amber-100 px-4 py-2 rounded-full border border-amber-200 shadow-sm transition-all"
+              >
+                <Circle size={8} className="fill-amber-500 text-amber-500 animate-pulse" />
+                <span className="text-xs font-bold tracking-tight">Sem Conexão (Clique para Reconectar)</span>
+              </button>
+            ) : (
+              <div className="flex items-center gap-2 text-[#2563EB] bg-blue-50 px-4 py-2 rounded-full border border-blue-100 shadow-sm">
+                <Circle size={8} className="fill-current animate-pulse" />
+                <span className="text-xs font-bold tracking-tight">Monitorando em tempo real</span>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="flex-1 px-8 pb-8 overflow-y-auto overflow-x-hidden">
@@ -253,9 +285,9 @@ export default function DeliveryPanelPage() {
                         animate={{ opacity: 1, scale: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.9 }}
                         transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                        onClick={() => isBeingSeparatedByMe && setFocusedReqId(req.id)}
+                        onClick={() => focusModeEnabled && isBeingSeparatedByMe && setFocusedReqId(req.id)}
                         className={`bg-white rounded-[2rem] p-8 shadow-xl shadow-slate-200/50 border flex flex-col relative group transition-all hover:shadow-2xl hover:-translate-y-1 ${
-                          isBeingSeparatedByMe ? 'cursor-pointer hover:border-indigo-300 ring-2 ring-indigo-500/20' : 'border-slate-100'
+                          isBeingSeparatedByMe && focusModeEnabled ? 'cursor-pointer hover:border-indigo-300 ring-2 ring-indigo-500/20' : 'border-slate-100'
                         } ${isNew ? 'ring-4 ring-indigo-500/50 border-indigo-500 animate-pulse bg-indigo-50/10' : ''}`}
                       >
                         {/* Top Bar */}
@@ -353,7 +385,7 @@ export default function DeliveryPanelPage() {
                               </button>
                               <button 
                                 onClick={() => {
-                                  if (isBeingSeparatedByMe) {
+                                  if (focusModeEnabled && isBeingSeparatedByMe) {
                                     setFocusedReqId(req.id);
                                   } else {
                                     handleConfirm(req.id);
@@ -367,7 +399,7 @@ export default function DeliveryPanelPage() {
                                 }`}
                               >
                                 {processingId === req.id ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />}
-                                {isBeingSeparatedByOthers ? 'Em Uso' : isBeingSeparatedByMe ? 'MODO FOCO' : 'Confirmar'}
+                                {isBeingSeparatedByOthers ? 'Em Uso' : (isBeingSeparatedByMe && focusModeEnabled) ? 'MODO FOCO' : 'Confirmar'}
                               </button>
                             </div>
                           )}
@@ -384,7 +416,7 @@ export default function DeliveryPanelPage() {
 
       {/* Focus Mode Modal rendered outside blurred content */}
       <AnimatePresence>
-        {focusedReqId && (
+        {focusModeEnabled && focusedReqId && (
           (() => {
             const focusedReq = requests.find(r => r.id === focusedReqId);
             if (!focusedReq) return null;
