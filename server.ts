@@ -10,27 +10,30 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import 'express-async-errors';
 
+const DEFAULT_DATABASE_URL = 'mysql://entregakit:e3kZL3tj2dnbFGsC@painel.thrudelivery.com.br:3306/entregakit';
+const databaseUrl = process.env.DATABASE_URL || DEFAULT_DATABASE_URL;
+
 const prisma = new PrismaClient({
   datasources: {
     db: {
-      url: process.env.DATABASE_URL
+      url: databaseUrl
     }
   }
 });
 
 // Debug: Check if DATABASE_URL is loaded
-if (process.env.DATABASE_URL) {
+if (databaseUrl) {
   try {
-    const parts = process.env.DATABASE_URL.split('@');
+    const parts = databaseUrl.split('@');
     if (parts.length > 1) {
       const hostPart = parts[1].split('/')[0];
       console.log(`Prisma Config: Attempting to connect to ${hostPart}`);
     }
   } catch (e) {
-    console.log("Prisma: DATABASE_URL is defined but could not be parsed for logging.");
+    console.log("Prisma: databaseUrl is defined but could not be parsed for logging.");
   }
 } else {
-  console.error("Prisma: DATABASE_URL is UNDEFINED in process.env");
+  console.error("Prisma: databaseUrl is UNDEFINED");
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || 'reirakits-secret-key-2024';
